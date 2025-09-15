@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Compressor</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+    #drop-zone {
+      border: 3px dashed #ccc;
+      padding: 50px;
+      width: 400px;
+      margin: 0 auto;
+      cursor: pointer;
+    }
+    #drop-zone.hover { border-color: #333; }
+    #file-input { display: none; }
+    #status { margin-top: 20px; }
+    a { display: block; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Video Compressor</h1>
+  <div id="drop-zone">Drag & Drop your .mov file here or click to select</div>
+  <input type="file" id="file-input" accept=".mov">
+  <div id="status"></div>
+
+  <script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const status = document.getElementById('status');
+
+    // Click to open file selector
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // Handle drag & drop
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('hover');
+    });
+    dropZone.addEventListener('dragleave', e => {
+      dropZone.classList.remove('hover');
+    });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('hover');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    // Handle file selection
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+      if (files.length === 0) return;
+      const file = files[0];
+      status.textContent = 'Uploading and compressing...';
+
+      const formData = new FormData();
+      formData.append('video', file);
+
+      fetch('/compress', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (!response.ok) throw new Error('Compression failed');
+        return response.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        status.innerHTML = `<a href="${url}" download="compressed.mp4">Download Compressed Video</a>`;
+      })
+      .catch(err => {
+        status.textContent = err.message;
+      });
+    }
+  </script>
+</body>
+</html>
+
