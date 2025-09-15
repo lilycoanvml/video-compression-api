@@ -1,4 +1,23 @@
 const express = require('express');
+const path = require('path');
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Serve static files from the frontend folder
+app.use(express.static(path.join(__dirname, 'frontend')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
+
+// Example video compression endpoint
+app.post('/compress', (req, res) => {
+  res.send('Compression route works!');
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+const express = require('express');
 const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
