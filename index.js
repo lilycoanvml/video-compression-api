@@ -2,82 +2,118 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
 const fs = require('fs');
 
+console.log('Starting server...');
+console.log('FFmpeg binary path:', ffmpegStatic);
+
+// Set FFmpeg binary path
+ffmpeg.setFfmpegPath(ffmpegStatic);
+
+// Catch any unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = 3001;
 
-// Ensure folders exist
-if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
-if (!fs.existsSync('compressed')) fs.mkdirSync('compressed');
+// Configure multer for video uploads
+const upload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
+});
 
-// Multer setup for uploads
-const upload = multer({ dest: 'uploads/' });
+// Ensure uploads directory exists
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'frontend')));
+// Use absolute path
+const frontendPath = path.resolve(__dirname, 'frontend');
+
+// Serve static files
+app.use(express.static(frontendPath));
+
+// Explicit route for root
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+  res.sendFile(path.resolve(frontendPath, 'index.html'));
 });
 
-// Compress video at a specific bitrate
-function compressVideo(inputPath, outputPath, bitrate) {
-  return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .outputOptions([
-        `-b:v ${bitrate}k`,
-        `-maxrate ${bitrate}k`,
-        `-bufsize ${bitrate * 2}k`,
-        '-c:a aac',
-        '-vf scale=640:-1', // optional resize
-        '-movflags +faststart'
-      ])
-      .save(outputPath)
-      .on('end', resolve)
-      .on('error', reject);
-  });
-}
-
-// Compress to target size
-async function compressToTargetSize(inputPath, outputPath, targetMB = 1.5) {
-  let bitrate = 1500; // starting kbps
-  const minBitrate = 200;
-
-  while (true) {
-    await compressVideo(inputPath, outputPath, bitrate);
-    const stats = fs.statSync(outputPath);
-    const sizeMB = stats.size / (1024 * 1024);
-
-    if (sizeMB <= targetMB || bitrate <= minBitrate) break;
-
-    bitrate -= 100; // lower bitrate and try again
+// Video compression endpoint
+app.post('/compress', upload.single('video'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No video file uploaded' });
   }
 
-  return bitrate;
-}
-
-// API endpoint
-app.post('/compress', upload.single('video'), async (req, res) => {
   const inputPath = req.file.path;
-  const outputPath = path.join('compressed', `${Date.now()}.mp4`);
+  const outputPath = `uploads/compressed-${Date.now()}.mp4`;
 
-  try {
-    const finalBitrate = await compressToTargetSize(inputPath, outputPath, 1.5);
-    console.log(`Compressed to ${finalBitrate} kbps`);
+  console.log(`Compressing video: ${req.file.originalname}`);
 
-    fs.unlinkSync(inputPath); // delete original
+  ffmpeg(inputPath)
+    .outputOptions([
+      '-vcodec libx264',    // H.264 codec
+      '-crf 28',            // Quality (18-28, lower = better quality)
+      '-preset medium',     // Compression speed
+      '-acodec aac',        // Audio codec
+      '-b:a 128k'           // Audio bitrate
+    ])
+    .output(outputPath)
+    .on('start', (cmd) => {
+      console.log('FFmpeg command:', cmd);
+    })
+    .on('progress', (progress) => {
+      console.log(`Processing: ${progress.percent?.toFixed(1) || 0}% done`);
+    })
+    .on('end', () => {
+      console.log('Compression finished!');
 
-    res.download(outputPath, 'compressed.mp4', () => {
-      fs.unlinkSync(outputPath); // cleanup after download
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Compression failed.');
-  }
+      // Send compressed file
+      res.download(outputPath, 'compressed.mp4', (err) => {
+        // Cleanup: delete both input and output files after download
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(outputPath);
+
+        if (err) {
+          console.error('Download error:', err);
+        }
+      });
+    })
+    .on('error', (err) => {
+      console.error('FFmpeg error:', err);
+
+      // Cleanup on error
+      fs.unlinkSync(inputPath);
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+
+      res.status(500).json({ error: 'Video compression failed', details: err.message });
+    })
+    .run();
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`👉 Open http://localhost:${PORT}/ in your browser`);
+  console.log('Server is now listening and should stay running...');
 });
+
+server.on('error', (err) => {
+  console.error('Server error:', err);
+});
+
+// Keep the process alive
+console.log('Server process started with PID:', process.pid);
+
+
+
+
+
 
