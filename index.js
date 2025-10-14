@@ -21,7 +21,13 @@ process.on('unhandledRejection', (err) => {
 });
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+```
+
+**2. Create Procfile:**
+Create a file named `Procfile` (no extension) with this content:
+```
+web: node index.js
 
 // Configure multer for video uploads
 const upload = multer({
