@@ -5,8 +5,12 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const fs = require('fs');
 
-// Set FFmpeg binary path correctly
-ffmpeg.setFfmpegPath(ffmpegStatic);
+// Use system FFmpeg on Heroku, fallback to ffmpeg-static locally
+if (process.env.FFMPEG_PATH) {
+  ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH);
+} else if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -126,7 +130,8 @@ app.post('/compress', upload.single('video'), (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', ffmpegPath: ffmpegStatic });
+  const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || 'system default';
+  res.json({ status: 'ok', ffmpegPath });
 });
 
 // Error handling middleware
@@ -143,7 +148,8 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
+  const ffmpegPath = process.env.FFMPEG_PATH || ffmpegStatic || 'system default';
   console.log(`🚀 Server running at http://localhost:${PORT}`);
   console.log(`Serving frontend from: ${frontendPath}`);
-  console.log(`FFmpeg binary: ${ffmpegStatic}`);
+  console.log(`FFmpeg binary: ${ffmpegPath}`);
 });
