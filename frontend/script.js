@@ -66,5 +66,3 @@ compressBtn.addEventListener("click", async () => {
     compressBtn.disabled = false;
   }
 });
-
-
