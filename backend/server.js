@@ -60,7 +60,7 @@ app.post('/compress', upload.single('video'), (req, res) => {
     .outputOptions([
       '-vcodec libx264',    // H.264 codec
       '-crf 28',            // Quality (18-28, lower = better quality)
-      '-preset medium',     // Compression speed
+      '-preset fast',       // Faster compression (was medium)
       '-acodec aac',        // Audio codec
       '-b:a 128k',          // Audio bitrate
       '-movflags +faststart' // Enable streaming
